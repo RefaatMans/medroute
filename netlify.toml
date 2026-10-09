@@ -1,0 +1,13 @@
+# Netlify: build the Vite app and serve it as a single-page app.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Let React Router handle every path (so refreshing /hospital doesn't 404).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

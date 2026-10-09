@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return signedIn() && me().role == 'admin'; }
+    function isAmbulance() { return signedIn() && me().role == 'ambulance'; }
+    function isStaffOf(hid) { return signedIn() && me().role == 'hospital' && me().hospitalId == hid; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role in ['ambulance', 'hospital', 'admin'];
+      allow update: if isAdmin()
+                    || (request.auth.uid == uid && request.resource.data.role == resource.data.role);
+    }
+
+    match /hospitals/{hid} {
+      // Deviation from the spec: hospital documents are publicly readable so the
+      // Register page can list hospitals before the user has an account.
+      // They hold only public info (name, location, bed counts, ER count).
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isStaffOf(hid) || isAmbulance();
+
+      match /beds/{bedId} {
+        allow read: if signedIn();
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin() || isStaffOf(hid) || isAmbulance();
+      }
+      match /erReadings/{rid} {
+        allow read: if signedIn();
+        allow create: if isAdmin() || isStaffOf(hid);
+      }
+    }
+
+    match /ambulances/{aid} {
+      // Deviation from the spec: publicly readable so the Register page can list call signs.
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isAmbulance()
+                    || (signedIn() && me().role == 'hospital');
+    }
+
+    match /dispatches/{did} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || isAmbulance();
+      allow update: if isAdmin() || isAmbulance() || isStaffOf(resource.data.hospitalId);
+    }
+  }
+}
