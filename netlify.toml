@@ -5,6 +5,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Firebase web config is public by design (it ships to every browser; access is
+  # controlled by firestore.rules), so don't treat these values as leaked secrets.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID"
 
 # Let React Router handle every path (so refreshing /hospital doesn't 404).
 [[redirects]]
