@@ -5,7 +5,7 @@ import NavBar from './components/layout/NavBar';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import SetupBanner from './components/layout/SetupBanner';
 import Spinner from './components/Spinner';
-import { ROLE_HOME } from './config/app';
+import { DEMO_NOTICE, ROLE_HOME } from './config/app';
 import { useAuth } from './hooks/useAuth';
 import AdminPage from './pages/AdminPage';
 import AmbulancePage from './pages/AmbulancePage';
@@ -43,6 +43,10 @@ export default function App() {
           <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </main>
+      <footer className="border-t border-slate-200 bg-white px-4 py-2 text-center text-xs text-slate-600">
+        <span aria-hidden="true">ⓘ </span>
+        {DEMO_NOTICE}
+      </footer>
       <Toaster position="top-center" toastOptions={{ duration: 4000 }} />
     </div>
   );

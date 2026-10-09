@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 
 /**
  * Which hospital a page is about. Hospital staff are locked to their own hospital;
- * admins pick one, kept in the URL (`?h=h-olive`) so links and reloads keep it.
+ * admins pick one, kept in the URL (`?h=h-aubmc`) so links and reloads keep it.
  */
 export function useSelectedHospitalId(): { hospitalId: string | null; canChoose: boolean; choose: (id: string) => void } {
   const { profile } = useAuth();

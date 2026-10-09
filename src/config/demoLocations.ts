@@ -11,5 +11,5 @@ export const DEMO_LOCATIONS: { name: string; location: LatLng }[] = [
 ];
 
 /** Default map centre (Greater Beirut). */
-export const MAP_CENTER: LatLng = { lat: 33.885, lng: 35.53 };
+export const MAP_CENTER: LatLng = { lat: 33.872, lng: 35.515 };
 export const MAP_ZOOM = 12;

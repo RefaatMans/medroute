@@ -48,7 +48,13 @@ _Coming in later milestones._
 
 _Coming in M8._
 
+## Demo data
+
+The seed uses 12 **real hospitals in Greater Beirut** (AUBMC, Clemenceau Medical Center, Rafik Hariri University Hospital, Sahel General, Al Rasoul Al Aazam, Makassed, Hôtel-Dieu de France, LAU Medical Center – Rizk, Saint George UMC, Geitaoui, Mount Lebanon Hospital, Bellevue Medical Center). Their **names and locations are real**: OpenStreetMap building centroids, cross-checked with Wikidata (checked October 2026). Their **beds, specialties, ER counts and trips are simulated**, and the app says so in a notice on every page. Phone numbers are left empty on purpose, so a demo tap on "Call" can't ring a real hospital. Edit the list in [src/lib/demoData.ts](src/lib/demoData.ts).
+
 ## Changes from the original spec
+
+- **Real hospital names** instead of the spec's fictional ones (see *Demo data*).
 
 - **Paramedic flow is automatic.** START → case type → severity → **GO**: the app picks the best hospital (travel time + free beds of the right type + ability to treat + ER crowding), reserves a bed and goes straight to the trip screen showing why. If that bed is taken at the same instant, it automatically tries the next best hospital. "Choose a different hospital" on the trip screen is a manual override.
 - **Hospitals cannot decline an ambulance.** Staff can only mark a trip as *seen* and *patient admitted*. A hospital that can't take more patients switches on **Diversion**, which stops new ambulances being sent there. Admins can still force-cancel a trip.

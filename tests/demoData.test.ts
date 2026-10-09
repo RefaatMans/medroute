@@ -37,9 +37,9 @@ describe('demo data', () => {
       }
       expect(new Set(beds.map((b) => b.id)).size).toBe(beds.length);
     }
-    const cedar = hospitals.find((h) => h.seed.id === 'h-cedar')!;
-    expect(cedar.beds.map((b) => b.label)).toContain('ICU-6');
-    expect(cedar.beds.map((b) => b.label)).toContain('GEN-20');
+    const aubmc = hospitals.find((h) => h.seed.id === 'h-aubmc')!;
+    expect(aubmc.beds.map((b) => b.label)).toContain('ICU-12');
+    expect(aubmc.beds.map((b) => b.label)).toContain('GEN-30');
   });
 
   it('is roughly 70% occupied, 10% cleaning, with at least one free bed of each type', () => {

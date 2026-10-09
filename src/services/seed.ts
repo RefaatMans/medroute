@@ -2,7 +2,7 @@ import { getDocs, query, serverTimestamp, where, writeBatch, type WriteBatch } f
 import { db } from '../firebase';
 import { crowdingLevel, crowdRatio } from '../lib/crowding';
 import { buildDemoHospitals, SEED_AMBULANCES } from '../lib/demoData';
-import { ambulanceDoc, bedDoc, dispatchDoc, dispatchesCol, hospitalDoc } from './db';
+import { ambulanceDoc, bedDoc, bedsCol, dispatchDoc, dispatchesCol, hospitalDoc, hospitalsCol } from './db';
 
 /** Firestore allows 500 writes per batch; stay under it. */
 const BATCH_LIMIT = 450;
@@ -28,6 +28,13 @@ export interface SeedResult {
 export async function seedDemoData(): Promise<SeedResult> {
   const hospitals = buildDemoHospitals();
   const writes: ((b: WriteBatch) => void)[] = [];
+
+  // Remove hospitals from an older seed list (and their beds) so the map shows only current ones.
+  const keep = new Set(hospitals.map((h) => h.seed.id));
+  for (const old of (await getDocs(hospitalsCol())).docs.filter((d) => !keep.has(d.id))) {
+    for (const bed of (await getDocs(bedsCol(old.id))).docs) writes.push((b) => b.delete(bed.ref));
+    writes.push((b) => b.delete(old.ref));
+  }
 
   for (const { seed, beds, bedSummary } of hospitals) {
     writes.push((b) =>
