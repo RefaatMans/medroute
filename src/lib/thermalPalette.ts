@@ -1,10 +1,11 @@
 /**
  * Thermal-camera look for the people counter (prototype).
  *
- * We do NOT have a real thermal sensor. This maps the brightness of an ordinary
- * video frame onto a thermal-style gradient so the feed reads as "thermal camera"
- * in a demo. Counting still runs on the original RGB frame (see CameraPage), so
- * accuracy is unchanged — only what the operator sees is recolored.
+ * We do NOT have a real thermal sensor. CameraPage downscales and blurs the
+ * frame (so faces and fine detail are gone, as with a real low-res thermal
+ * camera), then this maps brightness onto a thermal gradient with a contrast
+ * stretch so warm bodies separate from the cool room. Counting still runs on
+ * the original sharp RGB frame, so accuracy is unchanged — only the view changes.
  */
 
 /** A colour stop on the gradient: position 0..1 and its [r,g,b]. */
@@ -52,12 +53,28 @@ export function luma(r: number, g: number, b: number): number {
 }
 
 /**
- * Recolors an RGBA pixel buffer in place: each pixel's brightness becomes a
- * thermal colour. Alpha is preserved. Mutates and returns the same array.
+ * Pushes a brightness value (0..255) away from mid-grey so warm subjects
+ * separate cleanly from the cool background — a real thermal camera shows
+ * high contrast between a body and the room, not a flat grey photo.
+ * `strength` 0 = untouched, 1 = hard split around the midpoint.
  */
-export function applyThermal(data: Uint8ClampedArray): Uint8ClampedArray {
+function stretch(y: number, strength: number): number {
+  const t = y / 255 - 0.5;
+  // Smooth S-curve (tanh-like) around the midpoint, blended by strength.
+  const curved = Math.tanh(t * (1 + strength * 4)) * 0.5 + 0.5;
+  const out = (1 - strength) * (y / 255) + strength * curved;
+  return out * 255;
+}
+
+/**
+ * Recolors an RGBA pixel buffer in place: each pixel's brightness is contrast-
+ * stretched, then mapped onto the thermal gradient. Alpha is preserved.
+ * `contrast` (0..1) controls how hard warm/cool separate. Mutates and returns
+ * the same array.
+ */
+export function applyThermal(data: Uint8ClampedArray, contrast = 0.6): Uint8ClampedArray {
   for (let i = 0; i < data.length; i += 4) {
-    const y = luma(data[i], data[i + 1], data[i + 2]) | 0;
+    const y = stretch(luma(data[i], data[i + 1], data[i + 2]), contrast) | 0;
     const j = y * 3;
     data[i] = LUT[j];
     data[i + 1] = LUT[j + 1];
