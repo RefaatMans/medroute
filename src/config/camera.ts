@@ -16,5 +16,11 @@ export const HEARTBEAT_MS = 30_000;
 export const READING_INTERVAL_MS = 60_000;
 /** Upper limit of boxes per frame (crowded waiting rooms can exceed the library default of 20). */
 export const MAX_DETECTIONS = 60;
+/**
+ * Vertical resolution (px) the frame is downscaled to before the thermal recolor.
+ * Low = more "thermal" (faces unrecognisable, soft heat blobs); higher = sharper.
+ * ~96px keeps people as clear warm shapes while removing identifying detail.
+ */
+export const THERMAL_RES = 96;
 /** Number of history points shown on the ER chart. */
 export const ER_READINGS_LIMIT = 60;

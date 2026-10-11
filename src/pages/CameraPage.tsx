@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import type { DetectedObject, ObjectDetection } from '@tensorflow-models/coco-ssd';
 import HospitalPicker from '../components/HospitalPicker';
 import Spinner from '../components/Spinner';
-import { DETECT_INTERVAL_MS, MAX_DETECTIONS, MODEL_BASE, PERSON_MIN_SCORE } from '../config/camera';
+import { DETECT_INTERVAL_MS, MAX_DETECTIONS, MODEL_BASE, PERSON_MIN_SCORE, THERMAL_RES } from '../config/camera';
 import { CROWDING_LABELS } from '../config/labels';
 import { CROWD_STYLE } from '../config/ui';
 import { useHospital } from '../hooks/useHospitals';
@@ -364,22 +364,33 @@ function renderThermal(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // Draw the raw frame to an offscreen canvas, read its pixels, recolor to thermal.
+  // Downscale the frame to a small offscreen buffer first. Low resolution is what
+  // destroys faces and fine detail — the recoloured result reads as thermal "heat
+  // blobs", not a tinted photo. Scaling it back up (smoothed) blurs it further.
+  const lowH = THERMAL_RES;
+  const lowW = Math.max(1, Math.round((lowH * w) / h));
   let scratch = scratchRef.current;
   if (!scratch) {
     scratch = document.createElement('canvas');
     scratchRef.current = scratch;
   }
-  if (scratch.width !== w || scratch.height !== h) {
-    scratch.width = w;
-    scratch.height = h;
+  if (scratch.width !== lowW || scratch.height !== lowH) {
+    scratch.width = lowW;
+    scratch.height = lowH;
   }
   const sctx = scratch.getContext('2d', { willReadFrequently: true });
   if (!sctx) return;
-  sctx.drawImage(video, 0, 0, w, h);
-  const frame = sctx.getImageData(0, 0, w, h);
+  sctx.imageSmoothingEnabled = true;
+  sctx.drawImage(video, 0, 0, lowW, lowH); // shrink: averages pixels → blur
+  const frame = sctx.getImageData(0, 0, lowW, lowH);
   applyThermal(frame.data);
-  ctx.putImageData(frame, 0, 0);
+  sctx.putImageData(frame, 0, 0);
+
+  // Blow the small thermal buffer back up to full size with smoothing on, so the
+  // blocky low-res image becomes a soft thermal gradient.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(scratch, 0, 0, lowW, lowH, 0, 0, w, h);
 
   // Boxes + labels drawn on top, in cyan so they stay readable over warm colours.
   const scale = Math.max(1, canvas.width / 640);
