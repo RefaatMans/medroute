@@ -11,6 +11,7 @@ import { useHospital } from '../hooks/useHospitals';
 import { useNow } from '../hooks/useInterval';
 import { useSelectedHospitalId } from '../hooks/useSelectedHospital';
 import { pushWindow, readingDue, smoothedCount, uploadDecision, type UploadState } from '../lib/cameraLogic';
+import { applyThermal } from '../lib/thermalPalette';
 import { crowdingLevel, crowdRatio } from '../lib/crowding';
 import { formatAgo } from '../lib/time';
 import { errorMessage } from '../services/authService';
@@ -20,8 +21,10 @@ type Source = 'webcam' | 'file';
 type ModelState = 'loading' | 'ready' | 'error';
 
 /**
- * AI people counter (spec 9.5). Frames are analysed in this browser only; the only thing
- * that leaves the device is the smoothed number of people.
+ * Thermal people counter (spec 9.5). The feed is rendered with a thermal-camera look
+ * (see lib/thermalPalette) to stand in for a real thermal sensor in this prototype.
+ * Counting still runs on the original frame, so the number is unaffected. Frames are
+ * analysed in this browser only; the only thing that leaves the device is the count.
  */
 export default function CameraPage() {
   const { hospitalId, canChoose, choose } = useSelectedHospitalId();
@@ -30,6 +33,7 @@ export default function CameraPage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scratchRef = useRef<HTMLCanvasElement | null>(null); // offscreen frame used to recolor to thermal
   const modelRef = useRef<ObjectDetection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileUrlRef = useRef<string | null>(null);
@@ -123,7 +127,7 @@ export default function CameraPage() {
       resetCounting();
       setSource('webcam');
       setRunning(true);
-      toast.success('Webcam started');
+      toast.success('Thermal camera started');
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
       toast.error(
@@ -207,7 +211,7 @@ export default function CameraPage() {
           const detections = await model.detect(video, MAX_DETECTIONS, PERSON_MIN_SCORE);
           if (stopped) return;
           const people = detections.filter((d) => d.class === 'person' && d.score >= PERSON_MIN_SCORE);
-          drawOverlay(canvasRef.current, video, people);
+          renderThermal(canvasRef.current, scratchRef, video, people);
           bufferRef.current = pushWindow(bufferRef.current, people.length);
           const s = smoothedCount(bufferRef.current);
           setRawCount(people.length);
@@ -239,12 +243,12 @@ export default function CameraPage() {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <div role="note" className="mb-4 rounded-md border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-900">
         <span aria-hidden="true">🔒 </span>
-        <strong>People are counted on this device.</strong> No video or images are stored or sent — only the number.
+        <strong>People are counted on this device.</strong> The thermal view is privacy-friendly by design — no faces, and no video or images are stored or sent, only the number.
       </div>
 
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">AI camera — ER waiting room</h1>
+          <h1 className="text-2xl font-bold">Thermal camera — ER waiting room</h1>
           <p className="text-sm text-slate-600">
             {hospital.data?.name ?? '…'} ·{' '}
             <Link to={canChoose ? `/hospital?h=${hospitalId}` : '/hospital'} className="font-medium text-red-700 underline">
@@ -264,7 +268,7 @@ export default function CameraPage() {
             source === 'webcam' ? 'bg-red-700 text-white' : 'border border-slate-300 bg-white hover:bg-slate-50'
           }`}
         >
-          📷 Webcam
+          🌡️ Thermal camera
         </button>
         <label
           className={`cursor-pointer rounded-md px-4 py-3 font-semibold shadow-sm focus-within:ring-2 focus-within:ring-blue-600 ${
@@ -282,9 +286,10 @@ export default function CameraPage() {
       </div>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_18rem]">
-        <div className="relative overflow-hidden rounded-lg bg-slate-900">
-          <video ref={videoRef} muted playsInline className="block h-auto w-full" />
-          <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
+        <div className="relative overflow-hidden rounded-lg bg-black">
+          <video ref={videoRef} muted playsInline className="pointer-events-none absolute h-px w-px opacity-0" aria-hidden="true" />
+          <canvas ref={canvasRef} className="block h-auto w-full" aria-hidden="true" />
+          {source && <span className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 text-xs font-semibold tracking-wide text-orange-300">THERMAL</span>}
           {!source && (
             <div className="absolute inset-0 flex min-h-[16rem] items-center justify-center p-6 text-center text-slate-300">
               {modelState === 'loading' ? (
@@ -292,7 +297,7 @@ export default function CameraPage() {
               ) : modelState === 'error' ? (
                 <p className="text-red-300">Could not load the AI model: {modelError}</p>
               ) : (
-                <p>Choose “Webcam” or “Video file” to start counting.</p>
+                <p>Choose “Thermal camera” or “Video file” to start counting.</p>
               )}
             </div>
           )}
@@ -338,27 +343,57 @@ function sentAgo(at: number, now: Date): string {
   return sec < 60 ? `${sec} s ago` : formatAgo(new Date(at), now);
 }
 
-/** Draws person boxes and the live count on the overlay canvas. Nothing here is ever saved. */
-function drawOverlay(canvas: HTMLCanvasElement | null, video: HTMLVideoElement, people: DetectedObject[]) {
+/**
+ * Renders the current video frame as a thermal-style image on the visible canvas,
+ * then draws person boxes and the live count on top. Prototype stand-in for a real
+ * thermal camera — nothing here is ever saved.
+ */
+function renderThermal(
+  canvas: HTMLCanvasElement | null,
+  scratchRef: { current: HTMLCanvasElement | null },
+  video: HTMLVideoElement,
+  people: DetectedObject[],
+) {
   if (!canvas) return;
-  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
   }
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw the raw frame to an offscreen canvas, read its pixels, recolor to thermal.
+  let scratch = scratchRef.current;
+  if (!scratch) {
+    scratch = document.createElement('canvas');
+    scratchRef.current = scratch;
+  }
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w;
+    scratch.height = h;
+  }
+  const sctx = scratch.getContext('2d', { willReadFrequently: true });
+  if (!sctx) return;
+  sctx.drawImage(video, 0, 0, w, h);
+  const frame = sctx.getImageData(0, 0, w, h);
+  applyThermal(frame.data);
+  ctx.putImageData(frame, 0, 0);
+
+  // Boxes + labels drawn on top, in cyan so they stay readable over warm colours.
   const scale = Math.max(1, canvas.width / 640);
   ctx.lineWidth = 3 * scale;
   ctx.font = `${14 * scale}px system-ui, sans-serif`;
   for (const p of people) {
-    const [x, y, w, h] = p.bbox;
-    ctx.strokeStyle = '#22c55e';
-    ctx.strokeRect(x, y, w, h);
+    const [x, y] = p.bbox;
+    const [, , bw, bh] = p.bbox;
+    ctx.strokeStyle = '#22d3ee';
+    ctx.strokeRect(x, y, bw, bh);
     const label = `person ${Math.round(p.score * 100)}%`;
-    ctx.fillStyle = '#22c55e';
+    ctx.fillStyle = '#22d3ee';
     ctx.fillRect(x, Math.max(0, y - 20 * scale), ctx.measureText(label).width + 8 * scale, 20 * scale);
-    ctx.fillStyle = '#052e16';
+    ctx.fillStyle = '#083344';
     ctx.fillText(label, x + 4 * scale, Math.max(15 * scale, y - 5 * scale));
   }
   ctx.fillStyle = 'rgba(0,0,0,0.6)';

@@ -8,7 +8,7 @@ import type { UserRole } from '../../types';
 const LINKS: { to: string; label: string; roles: UserRole[] }[] = [
   { to: '/ambulance', label: 'Ambulance', roles: ['ambulance'] },
   { to: '/hospital', label: 'Hospital', roles: ['hospital', 'admin'] },
-  { to: '/hospital/camera', label: 'AI Camera', roles: ['hospital', 'admin'] },
+  { to: '/hospital/camera', label: 'Thermal Camera', roles: ['hospital', 'admin'] },
   { to: '/simulator', label: 'Simulator', roles: ['admin'] },
   { to: '/admin', label: 'Admin', roles: ['admin'] },
 ];
